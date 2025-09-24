@@ -1,2 +1,7 @@
 [build]
-  functions = "netlify/functions"
+  publish = "."           # or your build output folder if you have one
+  functions = "functions" # tells Netlify where your serverless functions live
+
+[dev]
+  functions = "functions" # allows local testing with netlify dev
+
