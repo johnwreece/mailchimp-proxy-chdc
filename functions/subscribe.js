@@ -1,62 +1,61 @@
-export async function handler(event) {
+// functions/subscribe.js
+require("dotenv").config();
+
+exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+    return { statusCode: 405, body: JSON.stringify({ error: "Method Not Allowed" }) };
   }
 
   try {
-    const { email_address, FNAME, LNAME } = JSON.parse(event.body);
+    const { email_address, firstName, lastName } = JSON.parse(event.body);
 
-    if (!email_address) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Email is required." }),
-      };
-    }
+    // Build Mailchimp URL using your server prefix and list ID from environment
+    const MAILCHIMP_SERVER_PREFIX = process.env.MAILCHIMP_SERVER_PREFIX;
+    const MAILCHIMP_LIST_ID = process.env.MAILCHIMP_LIST_ID;
+    const MAILCHIMP_API_KEY = process.env.MAILCHIMP_API_KEY;
 
-    // Extract Mailchimp datacenter from API key
-    const DATACENTER = process.env.MAILCHIMP_API_KEY.split("-")[1];
+    const url = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${MAILCHIMP_LIST_ID}/members`;
 
-    const url = `https://${DATACENTER}.api.mailchimp.com/3.0/lists/${process.env.MAILCHIMP_LIST_ID}/members`;
+    const bodyData = {
+      email_address,
+      status: "pending", // or "subscribed" if you don't want double opt-in
+      merge_fields: {
+        FNAME: firstName || "",
+        LNAME: lastName || "",
+      },
+    };
 
     const response = await fetch(url, {
       method: "POST",
       headers: {
-        Authorization: `apikey ${process.env.MAILCHIMP_API_KEY}`,
+        Authorization: `apikey ${MAILCHIMP_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        email_address,
-        status: "pending", // change to "subscribed" for no double opt-in
-        merge_fields: { FNAME, LNAME },
-      }),
+      body: JSON.stringify(bodyData),
     });
 
     const data = await response.json();
 
-    if (response.status === 400 && data.title === "Member Exists") {
+    // Full logging for debugging
+    console.log("Mailchimp response status:", response.status);
+    console.log("Mailchimp response body:", JSON.stringify(data));
+
+    if (response.ok) {
       return {
         statusCode: 200,
-        body: JSON.stringify({ success: true, message: "You are already subscribed." }),
+        body: JSON.stringify({ success: true, message: "Subscribed successfully!", data }),
       };
-    }
-
-    if (response.status >= 400) {
+    } else {
       return {
         statusCode: response.status,
-        body: JSON.stringify({ error: data.detail || "Subscription failed." }),
+        body: JSON.stringify({ error: data.detail || "Unknown error from Mailchimp", data }),
       };
     }
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ success: true, message: "Check your email to confirm subscription." }),
-    };
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message || "Internal server error." }),
-    };
+    console.error("Error in subscribe function:", err);
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
-}
+};
+
 
 
