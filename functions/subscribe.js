@@ -1,97 +1,51 @@
-const fetch = require("node-fetch");
+const fetch = require('node-fetch');
 
-exports.handler = async function(event, context) {
-  // CORS headers for your Shopify store
+exports.handler = async function(event) {
   const headers = {
-    "Access-Control-Allow-Origin": "https://chdcstore.myshopify.com",
+    "Access-Control-Allow-Origin": "*", // or your Shopify domain
     "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+    "Content-Type": "application/json",
   };
 
-  // Handle preflight OPTIONS request
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers };
   }
 
   try {
-    // Parse request body
-    const data = JSON.parse(event.body);
-    console.log("Received data:", data);
+    const { email_address, firstName, lastName } = JSON.parse(event.body);
 
-    const email = data.email_address;
-    const firstName = data.firstName || "";
-    const lastName = data.lastName || "";
+    console.log("Received:", { email_address, firstName, lastName });
 
-    if (!email) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Email is required." })
-      };
-    }
-
-    // Mailchimp API info from environment variables
-    const LIST_ID = process.env.LIST_ID;
-    const API_KEY = process.env.MAILCHIMP_API_KEY;
-    const SERVER_PREFIX = process.env.MAILCHIMP_SERVER_PREFIX;
-
-    if (!LIST_ID || !API_KEY || !SERVER_PREFIX) {
-      console.error("Missing Mailchimp environment variables.");
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: "Server configuration error." })
-      };
-    }
-
-    const url = `https://${SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${LIST_ID}/members`;
-
-    // Prepare payload
-    const payload = {
-      email_address: email,
-      status: "subscribed",
-      merge_fields: {
-        FNAME: firstName,
-        LNAME: lastName
-      }
-    };
-
-    console.log("Submitting to Mailchimp:", payload);
+    // Mailchimp request
+    const apiKey = process.env.MAILCHIMP_API_KEY;
+    const listId = process.env.LIST_ID;
+    const serverPrefix = process.env.MAILCHIMP_SERVER_PREFIX;
+    const url = `https://${serverPrefix}.api.mailchimp.com/3.0/lists/${listId}/members`;
 
     const response = await fetch(url, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Authorization": `apikey ${API_KEY}`,
+        "Authorization": `apikey ${apiKey}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        email_address,
+        status: "subscribed",
+        merge_fields: { FNAME: firstName, LNAME: lastName }
+      })
     });
 
-    const responseData = await response.json();
-    console.log("Mailchimp response:", responseData);
+    const data = await response.json();
+    console.log("Mailchimp response:", data);
 
-    if (response.status === 200 || response.status === 201) {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ message: "Subscribed successfully!" })
-      };
-    } else {
-      return {
-        statusCode: response.status,
-        headers,
-        body: JSON.stringify({
-          error: responseData.detail || "An error occurred."
-        })
-      };
+    if (!response.ok) {
+      return { statusCode: response.status, headers, body: JSON.stringify({ error: data.detail || "Mailchimp error" }) };
     }
+
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
   } catch (err) {
-    console.error("Error in subscribe function:", err);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: "An error occurred. Please try later." })
-    };
+    console.error("Function error:", err);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 };
 
