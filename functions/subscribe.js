@@ -67,7 +67,7 @@ exports.handler = async (event) => {
     const response = await fetch(url, {
       method: "POST",
       headers: {
-        "Authorization": `apikey ${API_KEY}`,
+        "Authorization": "Basic " + Buffer.from(`anystring:${API_KEY}`).toString("base64"),
         "Content-Type": "application/json"
       },
       body: JSON.stringify(body)
@@ -98,6 +98,7 @@ exports.handler = async (event) => {
     };
   }
 };
+
 
 
 
